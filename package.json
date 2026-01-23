@@ -1,0 +1,115 @@
+{
+  "name": "north-star",
+  "displayName": "North Star",
+  "description": "Persistent memory extension for seamless context preservation across AI model switches",
+  "version": "0.1.0",
+  "publisher": "your-publisher-id",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "ai",
+    "context",
+    "memory",
+    "llm",
+    "rag"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "northStar.openChat",
+        "title": "North Star: Open Chat Panel"
+      },
+      {
+        "command": "northStar.switchModel",
+        "title": "North Star: Switch AI Model"
+      },
+      {
+        "command": "northStar.viewObjectives",
+        "title": "North Star: View Current Objectives"
+      },
+      {
+        "command": "northStar.exportSession",
+        "title": "North Star: Export Session to Markdown"
+      },
+      {
+        "command": "northStar.resumeSession",
+        "title": "North Star: Resume Previous Session"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "north-star",
+          "title": "North Star",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "north-star": [
+        {
+          "id": "northStar.chatView",
+          "name": "Chat"
+        },
+        {
+          "id": "northStar.objectivesView",
+          "name": "Objectives"
+        },
+        {
+          "id": "northStar.highlightsView",
+          "name": "Highlights"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "North Star",
+      "properties": {
+        "northStar.defaultModel": {
+          "type": "string",
+          "default": "claude",
+          "enum": ["claude", "gemini", "openai"],
+          "description": "Default AI model to use"
+        },
+        "northStar.autoSaveInterval": {
+          "type": "number",
+          "default": 30,
+          "description": "Auto-save session interval in seconds"
+        },
+        "northStar.embeddingModel": {
+          "type": "string",
+          "default": "local",
+          "enum": ["local", "openai"],
+          "description": "Embedding model for vector search"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.2.0"
+  }
+}
