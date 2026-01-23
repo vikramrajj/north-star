@@ -1,11 +1,15 @@
 {
   "name": "north-star",
   "displayName": "North Star",
-  "description": "Persistent memory extension for seamless context preservation across AI model switches",
+  "description": "Persistent memory extension for seamless context preservation across AI model switches using Hybrid RAG",
   "version": "0.1.0",
-  "publisher": "your-publisher-id",
+  "publisher": "north-star",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/north-star"
+  },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.74.0"
   },
   "categories": [
     "Other",
@@ -16,7 +20,11 @@
     "context",
     "memory",
     "llm",
-    "rag"
+    "rag",
+    "claude",
+    "gemini",
+    "gpt",
+    "model-switching"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -26,23 +34,33 @@
     "commands": [
       {
         "command": "northStar.openChat",
-        "title": "North Star: Open Chat Panel"
+        "title": "North Star: Open Chat Panel",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "northStar.switchModel",
-        "title": "North Star: Switch AI Model"
+        "title": "North Star: Switch AI Model",
+        "icon": "$(arrow-swap)"
       },
       {
         "command": "northStar.viewObjectives",
-        "title": "North Star: View Current Objectives"
+        "title": "North Star: View Current Objectives",
+        "icon": "$(target)"
       },
       {
         "command": "northStar.exportSession",
-        "title": "North Star: Export Session to Markdown"
+        "title": "North Star: Export Session to Markdown",
+        "icon": "$(export)"
       },
       {
         "command": "northStar.resumeSession",
-        "title": "North Star: Resume Previous Session"
+        "title": "North Star: Resume Previous Session",
+        "icon": "$(history)"
+      },
+      {
+        "command": "northStar.clearSession",
+        "title": "North Star: Clear Session Data",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -50,7 +68,7 @@
         {
           "id": "north-star",
           "title": "North Star",
-          "icon": "media/icon.svg"
+          "icon": "$(star-full)"
         }
       ]
     },
@@ -76,21 +94,89 @@
         "northStar.defaultModel": {
           "type": "string",
           "default": "claude",
-          "enum": ["claude", "gemini", "openai"],
+          "enum": [
+            "claude",
+            "gemini",
+            "openai"
+          ],
           "description": "Default AI model to use"
+        },
+        "northStar.claudeApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for Claude (Anthropic)"
+        },
+        "northStar.claudeModel": {
+          "type": "string",
+          "default": "claude-3-5-sonnet-20241022",
+          "description": "Claude model to use"
+        },
+        "northStar.geminiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for Gemini (Google)"
+        },
+        "northStar.geminiModel": {
+          "type": "string",
+          "default": "gemini-1.5-pro",
+          "description": "Gemini model to use"
+        },
+        "northStar.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for OpenAI (GPT)"
+        },
+        "northStar.openaiModel": {
+          "type": "string",
+          "default": "gpt-4o",
+          "description": "OpenAI model to use"
         },
         "northStar.autoSaveInterval": {
           "type": "number",
           "default": 30,
+          "minimum": 10,
+          "maximum": 300,
           "description": "Auto-save session interval in seconds"
+        },
+        "northStar.maxMessagesInMemory": {
+          "type": "number",
+          "default": 100,
+          "minimum": 10,
+          "maximum": 500,
+          "description": "Maximum messages to keep in memory"
         },
         "northStar.embeddingModel": {
           "type": "string",
           "default": "local",
-          "enum": ["local", "openai"],
-          "description": "Embedding model for vector search"
+          "enum": [
+            "local",
+            "openai"
+          ],
+          "description": "Embedding model for vector search (local is private, openai is higher quality)"
         }
       }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "northStar.openChat"
+        },
+        {
+          "command": "northStar.switchModel"
+        },
+        {
+          "command": "northStar.viewObjectives"
+        },
+        {
+          "command": "northStar.exportSession"
+        },
+        {
+          "command": "northStar.resumeSession"
+        },
+        {
+          "command": "northStar.clearSession"
+        }
+      ]
     }
   },
   "scripts": {
@@ -99,17 +185,17 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "test": "node ./out/test/runTest.js",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/vsce": "^2.22.0",
     "eslint": "^8.54.0",
     "typescript": "^5.3.0"
   },
-  "dependencies": {
-    "better-sqlite3": "^9.2.0"
-  }
+  "dependencies": {}
 }
