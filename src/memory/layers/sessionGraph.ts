@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { FileStorage, StorageFiles } from '../../storage/fileStorage';
 
 /**
  * Node types in the knowledge graph
@@ -32,10 +33,10 @@ export interface GraphEdge {
 export class SessionGraph {
     private nodes: Map<string, GraphNode> = new Map();
     private edges: GraphEdge[] = [];
-    private context: vscode.ExtensionContext;
+    private storage: FileStorage;
 
     constructor(context: vscode.ExtensionContext) {
-        this.context = context;
+        this.storage = new FileStorage(context);
         this.loadFromStorage();
     }
 
@@ -99,23 +100,28 @@ export class SessionGraph {
     }
 
     private loadFromStorage(): void {
-        const stored = this.context.globalState.get<{ nodes: [string, GraphNode][]; edges: GraphEdge[] }>('sessionGraph');
-        if (stored) {
-            this.nodes = new Map(stored.nodes);
-            this.edges = stored.edges;
+        const data = this.storage.read<{ nodes: [string, GraphNode][]; edges: GraphEdge[] }>(
+            StorageFiles.GRAPH_NODES,
+            { nodes: [], edges: [] }
+        );
+
+        if (data && data.nodes) {
+            this.nodes = new Map(data.nodes);
+            this.edges = data.edges || [];
         }
     }
 
     private saveToStorage(): void {
-        this.context.globalState.update('sessionGraph', {
+        const data = {
             nodes: Array.from(this.nodes.entries()),
             edges: this.edges
-        });
+        };
+        this.storage.write(StorageFiles.GRAPH_NODES, data);
     }
 
     clear(): void {
         this.nodes.clear();
         this.edges = [];
-        this.saveToStorage();
+        this.storage.delete(StorageFiles.GRAPH_NODES);
     }
 }

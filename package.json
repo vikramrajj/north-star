@@ -3,13 +3,14 @@
   "displayName": "North Star",
   "description": "Persistent memory extension for seamless context preservation across AI model switches using Hybrid RAG",
   "version": "0.1.0",
+  "icon": "images/icon.png",
   "publisher": "north-star",
   "repository": {
     "type": "git",
     "url": "https://github.com/YOUR_USERNAME/north-star"
   },
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
     "Other",
@@ -76,15 +77,18 @@
       "north-star": [
         {
           "id": "northStar.chatView",
-          "name": "Chat"
+          "name": "Chat",
+          "icon": "$(comment-discussion)"
         },
         {
           "id": "northStar.objectivesView",
-          "name": "Objectives"
+          "name": "Objectives",
+          "icon": "$(target)"
         },
         {
           "id": "northStar.highlightsView",
-          "name": "Highlights"
+          "name": "Highlights",
+          "icon": "$(pin)"
         }
       ]
     },

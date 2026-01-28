@@ -34,27 +34,25 @@ When using AI coding assistants, context is lost when:
 
 ## Installation
 
-```bash
-# Clone the repo
-git clone https://github.com/YOUR_USERNAME/north-star.git
+1. Install via VS Code Marketplace: Search for **"North Star"**.
+2. Or install manually:
+   - Download the `.vsix` file from Releases.
+   - Run `code --install-extension north-star-0.1.0.vsix`
 
-# Install dependencies
-cd north-star
-npm install
+## Setup
 
-# Build extension
-npm run compile
-```
+1. Open VS Code Settings (`Ctrl+,`).
+2. Search for `northStar`.
+3. Add API Keys for your preferred providers:
+   - `northStar.claudeApiKey`
+   - `northStar.geminiApiKey`
+   - `northStar.openaiApiKey`
 
-## Development
+## Usage
 
-```bash
-# Run in development mode
-npm run watch
-
-# Run tests
-npm run test
-```
+1. **Open Chat**: Click the star icon in the Activity Bar or run command `North Star: Open Chat Panel`.
+2. **Set Objective**: Start chatting or manually set a goal.
+3. **Switch Model**: Click the model name (e.g., "Claude") to switch to Gemini/GPT. Context is preserved automatically!
 
 ## License
 
