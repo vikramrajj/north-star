@@ -1,9 +1,4 @@
-import { env, pipeline } from '@xenova/transformers';
 import * as vscode from 'vscode';
-
-// Configure transformers to use local cache
-// env.cacheDir is set in initialize()
-env.allowLocalModels = false; // Allow downloading from HF Hub first time
 
 /**
  * Singleton class for Local Embedding Model
@@ -32,6 +27,12 @@ export class LocalEmbeddingModel {
 
         this.isInitializing = true;
         try {
+            // Dynamic import to prevent top-level load issues
+            const { env, pipeline } = await import('@xenova/transformers');
+
+            // Configure transformers to use local cache
+            env.allowLocalModels = false; // Allow downloading from HF Hub first time
+
             if (cacheDir) {
                 env.cacheDir = cacheDir;
             }

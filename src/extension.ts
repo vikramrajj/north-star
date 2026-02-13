@@ -9,15 +9,22 @@ let contextBridge: ContextBridge;
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🌟 North Star is now active!');
 
-    // 1. Initialize ContextBridge (Sync)
-    contextBridge = new ContextBridge(context);
-
-    // 2. Initialize & Register Sidebar (Sync - CRITICAL for "No data provider" fix)
+    // 1. Initialize & Register Sidebar (Sync - ABSOLUTE FIRST STEP)
+    // This ensures VS Code doesn't show "No data provider" even if the rest fails
     const sidebarProvider = new SidebarProvider(context.extensionUri);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(SidebarProvider.viewType, sidebarProvider)
     );
-    contextBridge.registerSidebar(sidebarProvider);
+
+    // 2. Initialize ContextBridge (Sync)
+    try {
+        contextBridge = new ContextBridge(context);
+        contextBridge.registerSidebar(sidebarProvider);
+    } catch (e) {
+        console.error("Failed to initialize ContextBridge:", e);
+        vscode.window.showErrorMessage("North Star Core failed to init: " + e);
+        // We do NOT return here, so that commands below are still registered
+    }
 
     // 3. Initialize Session Recovery (Sync instantiation, Async check)
     const sessionRecovery = new SessionRecovery(context);
