@@ -13,15 +13,17 @@ export class ConversationSaver {
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
-        this.initSessionDir();
+        // init must be called
     }
 
-    private initSessionDir(): void {
+    async initialize(): Promise<void> {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (workspaceRoot) {
             this.sessionDir = path.join(workspaceRoot, '.north-star', 'sessions');
-            if (!fs.existsSync(this.sessionDir)) {
-                fs.mkdirSync(this.sessionDir, { recursive: true });
+            try {
+                await fs.promises.mkdir(this.sessionDir, { recursive: true });
+            } catch (err: any) {
+                if (err.code !== 'EEXIST') throw err;
             }
         }
     }
@@ -30,6 +32,14 @@ export class ConversationSaver {
      * Export session to human-readable Markdown
      */
     async exportToMarkdown(messages: Message[], objectives: Objective[]): Promise<void> {
+        if (!this.sessionDir) {
+            await this.initialize();
+            if (!this.sessionDir) {
+                vscode.window.showErrorMessage('No workspace open to save export.');
+                return;
+            }
+        }
+
         const timestamp = new Date().toISOString().split('T')[0];
         const title = objectives[0]?.statement || 'Untitled Session';
         const slugTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
@@ -38,21 +48,21 @@ export class ConversationSaver {
         const sessionPath = path.join(this.sessionDir, dirname);
 
         if (!fs.existsSync(sessionPath)) {
-            fs.mkdirSync(sessionPath, { recursive: true });
+            await fs.promises.mkdir(sessionPath, { recursive: true });
         }
 
         // Generate markdown content
         const markdown = this.generateMarkdown(messages, objectives);
         const mdPath = path.join(sessionPath, 'conversation.md');
-        fs.writeFileSync(mdPath, markdown);
+        await fs.promises.writeFile(mdPath, markdown);
 
         // Save structured JSON
         const jsonPath = path.join(sessionPath, 'session.json');
-        fs.writeFileSync(jsonPath, JSON.stringify({ messages, objectives }, null, 2));
+        await fs.promises.writeFile(jsonPath, JSON.stringify({ messages, objectives }, null, 2));
 
         // Save objectives separately for quick access
         const objPath = path.join(sessionPath, 'objectives.json');
-        fs.writeFileSync(objPath, JSON.stringify(objectives, null, 2));
+        await fs.promises.writeFile(objPath, JSON.stringify(objectives, null, 2));
 
         vscode.window.showInformationMessage(`Session exported to ${sessionPath}`);
     }

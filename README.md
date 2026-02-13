@@ -26,11 +26,16 @@ When using AI coding assistants, context is lost when:
 │                   North Star Core                   │
 ├─────────────────────────────────────────────────────┤
 │  Layer 1: Immediate Context (last 5 messages)       │
-│  Layer 2: Session Graph (entities + relationships)  │
-│  Layer 3: Vector Store (semantic search)            │
+│  Layer 2: Session Graph (SQLite: entities + edges)  │
+│  Layer 3: Vector Store (SQLite: local embeddings)   │
 │  Layer 4: Persistent KB (cross-session memory)      │
 └─────────────────────────────────────────────────────┘
 ```
+
+### New in v0.1.0 🚀
+- **Local Embeddings**: Uses `all-MiniLM-L6-v2` (ONNX) running locally for privacy and speed. No API costs for embeddings!
+- **SQLite Storage**: Powered by `better-sqlite3` for robust, scalable persistence. Handle thousands of interactions without slowing down.
+- **Hybrid Retrieval**: Combines Graph traversal (symbolic) with Vector search (semantic) for superior context awareness.
 
 ## Installation
 

@@ -25,11 +25,12 @@ export class GeminiAdapter extends BaseModelAdapter {
         const baseUrl = this.config.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
 
         const response = await fetch(
-            `${baseUrl}/models/${model}:generateContent?key=${this.config.apiKey}`,
+            `${baseUrl}/models/${model}:generateContent`,
             {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': this.config.apiKey
                 },
                 body: JSON.stringify({
                     systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
@@ -69,11 +70,12 @@ export class GeminiAdapter extends BaseModelAdapter {
         const baseUrl = this.config.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
 
         const response = await fetch(
-            `${baseUrl}/models/${model}:streamGenerateContent?alt=sse&key=${this.config.apiKey}`,
+            `${baseUrl}/models/${model}:streamGenerateContent?alt=sse`,
             {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': this.config.apiKey
                 },
                 body: JSON.stringify({
                     systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,

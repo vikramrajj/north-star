@@ -18,7 +18,11 @@ export class KeywordSearch {
 
     constructor(context: vscode.ExtensionContext) {
         this.storage = new FileStorage(context);
-        this.loadMessages();
+        // init must be called
+    }
+
+    async initialize(): Promise<void> {
+        await this.loadMessages();
     }
 
     /**
@@ -86,8 +90,8 @@ export class KeywordSearch {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    private loadMessages(): void {
-        const data = this.storage.read<{ messages: Message[] }>(StorageFiles.SESSION_STATE, { messages: [] });
+    private async loadMessages(): Promise<void> {
+        const data = await this.storage.read<{ messages: Message[] }>(StorageFiles.SESSION_STATE, { messages: [] });
         this.messages = data.messages || [];
     }
 }

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { FileStorage, StorageFiles } from '../../storage/fileStorage';
+import { SQLiteManager } from '../../storage/sqliteManager';
 
 /**
  * Node types in the knowledge graph
@@ -27,54 +27,89 @@ export interface GraphEdge {
 }
 
 /**
- * Layer 2: Session Knowledge Graph
+ * Layer 2: Session Knowledge Graph (SQLite Backed)
  * Stores entities and their relationships for structured retrieval
  */
 export class SessionGraph {
-    private nodes: Map<string, GraphNode> = new Map();
-    private edges: GraphEdge[] = [];
-    private storage: FileStorage;
+    private dbManager: SQLiteManager;
 
     constructor(context: vscode.ExtensionContext) {
-        this.storage = new FileStorage(context);
-        this.loadFromStorage();
+        this.dbManager = SQLiteManager.getInstance();
+        // Database should be initialized by ContextBridge
     }
 
-    addNode(node: GraphNode): void {
-        this.nodes.set(node.id, node);
-        this.saveToStorage();
+    async initialize(): Promise<void> {
+        // No-op, DB initialized globally
     }
 
-    addEdge(edge: GraphEdge): void {
-        this.edges.push(edge);
-        this.saveToStorage();
+    async addNode(node: GraphNode): Promise<void> {
+        const stmt = this.dbManager.getDB().prepare(`
+            INSERT OR REPLACE INTO graph_nodes (id, type, content, metadata, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        `);
+
+        stmt.run(
+            node.id,
+            node.type,
+            node.content,
+            JSON.stringify(node.metadata || {}),
+            node.createdAt.getTime()
+        );
+    }
+
+    async addEdge(edge: GraphEdge): Promise<void> {
+        const stmt = this.dbManager.getDB().prepare(`
+            INSERT OR REPLACE INTO graph_edges (source, target, type, weight, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        `);
+
+        stmt.run(
+            edge.from,
+            edge.to,
+            edge.type,
+            edge.weight || 1.0,
+            Date.now()
+        );
     }
 
     /**
-     * Traverse graph from a starting node up to specified depth
+     * Traverse graph from a starting node up to specified depth (BFS)
      */
     traverse(startId: string, depth: number = 3, nodeTypes?: NodeType[]): GraphNode[] {
         const visited = new Set<string>();
         const result: GraphNode[] = [];
+        let queue: { id: string, depth: number }[] = [{ id: startId, depth: 0 }];
 
-        const dfs = (nodeId: string, currentDepth: number) => {
-            if (currentDepth > depth || visited.has(nodeId)) return;
-            visited.add(nodeId);
+        const nodeStmt = this.dbManager.getDB().prepare('SELECT * FROM graph_nodes WHERE id = ?');
+        const edgesStmt = this.dbManager.getDB().prepare('SELECT * FROM graph_edges WHERE source = ? OR target = ?');
 
-            const node = this.nodes.get(nodeId);
-            if (node && (!nodeTypes || nodeTypes.includes(node.type))) {
-                result.push(node);
+        while (queue.length > 0) {
+            const { id, depth: currentDepth } = queue.shift()!;
+
+            if (currentDepth > depth || visited.has(id)) continue;
+            visited.add(id);
+
+            // Fetch node
+            const row = nodeStmt.get(id) as any;
+            if (row) {
+                const node = this.mapRowToNode(row);
+                if (!nodeTypes || nodeTypes.includes(node.type)) {
+                    result.push(node);
+                }
             }
 
-            // Find connected nodes
-            const connectedEdges = this.edges.filter(e => e.from === nodeId || e.to === nodeId);
-            for (const edge of connectedEdges) {
-                const nextId = edge.from === nodeId ? edge.to : edge.from;
-                dfs(nextId, currentDepth + 1);
+            if (currentDepth < depth) {
+                // Fetch connected edges
+                const edges = edgesStmt.all(id) as any[];
+                for (const edge of edges) {
+                    const nextId = edge.source === id ? edge.target : edge.source;
+                    if (!visited.has(nextId)) {
+                        queue.push({ id: nextId, depth: currentDepth + 1 });
+                    }
+                }
             }
-        };
+        }
 
-        dfs(startId, 0);
         return result;
     }
 
@@ -82,7 +117,9 @@ export class SessionGraph {
      * Find nodes by type
      */
     getNodesByType(type: NodeType): GraphNode[] {
-        return Array.from(this.nodes.values()).filter(n => n.type === type);
+        const stmt = this.dbManager.getDB().prepare('SELECT * FROM graph_nodes WHERE type = ? ORDER BY created_at DESC');
+        const rows = stmt.all(type) as any[];
+        return rows.map(this.mapRowToNode);
     }
 
     /**
@@ -99,29 +136,18 @@ export class SessionGraph {
         return this.getNodesByType('Intent');
     }
 
-    private loadFromStorage(): void {
-        const data = this.storage.read<{ nodes: [string, GraphNode][]; edges: GraphEdge[] }>(
-            StorageFiles.GRAPH_NODES,
-            { nodes: [], edges: [] }
-        );
-
-        if (data && data.nodes) {
-            this.nodes = new Map(data.nodes);
-            this.edges = data.edges || [];
-        }
+    async clear(): Promise<void> {
+        this.dbManager.getDB().exec('DELETE FROM graph_nodes');
+        this.dbManager.getDB().exec('DELETE FROM graph_edges');
     }
 
-    private saveToStorage(): void {
-        const data = {
-            nodes: Array.from(this.nodes.entries()),
-            edges: this.edges
+    private mapRowToNode(row: any): GraphNode {
+        return {
+            id: row.id,
+            type: row.type as NodeType,
+            content: row.content,
+            metadata: JSON.parse(row.metadata || '{}'),
+            createdAt: new Date(row.created_at)
         };
-        this.storage.write(StorageFiles.GRAPH_NODES, data);
-    }
-
-    clear(): void {
-        this.nodes.clear();
-        this.edges = [];
-        this.storage.delete(StorageFiles.GRAPH_NODES);
     }
 }

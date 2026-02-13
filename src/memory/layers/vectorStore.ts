@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { LocalEmbeddingModel } from '../../memory/retrieval/localEmbeddings';
+import { SQLiteManager } from '../../storage/sqliteManager';
 
 export interface VectorEntry {
     id: string;
@@ -8,19 +10,16 @@ export interface VectorEntry {
 }
 
 /**
- * Layer 3: Vector Store
+ * Layer 3: Vector Store (SQLite Backed)
  * Semantic search using embeddings
- * 
- * Note: In production, use a proper vector DB like ChromaDB or SQLite-VSS
- * This is a simplified in-memory implementation
  */
 export class VectorStore {
-    private entries: VectorEntry[] = [];
+    private dbManager: SQLiteManager;
     private context: vscode.ExtensionContext;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
-        this.loadFromStorage();
+        this.dbManager = SQLiteManager.getInstance();
     }
 
     /**
@@ -28,8 +27,21 @@ export class VectorStore {
      */
     async add(id: string, content: string, metadata?: Record<string, any>): Promise<void> {
         const embedding = await this.generateEmbedding(content);
-        this.entries.push({ id, content, embedding, metadata });
-        this.saveToStorage();
+        // Convert to Buffer for BLOB storage
+        const buffer = Buffer.from(new Float32Array(embedding).buffer);
+
+        const stmt = this.dbManager.getDB().prepare(`
+            INSERT OR REPLACE INTO vectors(id, content, embedding, metadata, created_at)
+VALUES(?, ?, ?, ?, ?)
+    `);
+
+        stmt.run(
+            id,
+            content,
+            buffer,
+            JSON.stringify(metadata || {}),
+            Date.now()
+        );
     }
 
     /**
@@ -38,11 +50,27 @@ export class VectorStore {
     async search(query: string, k: number = 10): Promise<VectorEntry[]> {
         const queryEmbedding = await this.generateEmbedding(query);
 
-        // Calculate similarity scores
-        const scored = this.entries.map(entry => ({
-            entry,
-            score: this.cosineSimilarity(queryEmbedding, entry.embedding)
-        }));
+        // Fetch all vectors (Full Scan - optimized by native SQLite speed)
+        // For <10k rows, this is remarkably fast.
+        // For >10k, we would need an index (IVF) or sqlite-vss.
+        const stmt = this.dbManager.getDB().prepare('SELECT id, content, embedding, metadata FROM vectors');
+        const rows = stmt.all() as any[];
+
+        const scored = rows.map(row => {
+            // Reconstruct Float32Array from Buffer
+            const buffer = row.embedding as Buffer;
+            const vector = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4);
+
+            return {
+                entry: {
+                    id: row.id,
+                    content: row.content,
+                    embedding: Array.from(vector), // Convert back to number[] for interface
+                    metadata: JSON.parse(row.metadata || '{}')
+                },
+                score: this.cosineSimilarity(queryEmbedding, vector)
+            };
+        });
 
         // Sort by similarity and return top k
         return scored
@@ -53,31 +81,21 @@ export class VectorStore {
 
     /**
      * Generate embedding for text
-     * TODO: Replace with actual embedding model (local or API)
      */
     private async generateEmbedding(text: string): Promise<number[]> {
-        // Simple hash-based embedding for demo
-        // In production: use all-MiniLM-L6-v2 (local) or OpenAI embeddings (API)
-        const hash = this.simpleHash(text);
-        const embedding = new Array(384).fill(0);
-
-        for (let i = 0; i < Math.min(text.length, 384); i++) {
-            embedding[i] = (text.charCodeAt(i) + hash) / 255;
+        // Use real local embedding model
+        try {
+            const model = LocalEmbeddingModel.getInstance();
+            // Ensure initialized with storage path
+            await model.initialize(this.context.globalStorageUri.fsPath);
+            return await model.generate(text);
+        } catch (error) {
+            console.error('Embedding generation failed, falling back to zero vector:', error);
+            return new Array(384).fill(0);
         }
-
-        return embedding;
     }
 
-    private simpleHash(str: string): number {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            hash = ((hash << 5) - hash) + str.charCodeAt(i);
-            hash |= 0;
-        }
-        return Math.abs(hash);
-    }
-
-    private cosineSimilarity(a: number[], b: number[]): number {
+    private cosineSimilarity(a: number[], b: Float32Array): number {
         let dotProduct = 0;
         let normA = 0;
         let normB = 0;
@@ -91,19 +109,7 @@ export class VectorStore {
         return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
     }
 
-    private loadFromStorage(): void {
-        const stored = this.context.globalState.get<VectorEntry[]>('vectorStore');
-        if (stored) {
-            this.entries = stored;
-        }
-    }
-
-    private saveToStorage(): void {
-        this.context.globalState.update('vectorStore', this.entries);
-    }
-
     clear(): void {
-        this.entries = [];
-        this.saveToStorage();
+        this.dbManager.getDB().exec('DELETE FROM vectors');
     }
 }

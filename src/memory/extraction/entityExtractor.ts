@@ -112,7 +112,7 @@ export class EntityExtractor {
     /**
      * Extract entities from a message and add to graph
      */
-    extractEntities(content: string): GraphNode[] {
+    async extractEntities(content: string): Promise<GraphNode[]> {
         const extracted: GraphNode[] = [];
 
         for (const { type, patterns } of this.ENTITY_PATTERNS) {
@@ -126,7 +126,7 @@ export class EntityExtractor {
                         content: entityContent.trim(),
                         createdAt: new Date()
                     };
-                    this.sessionGraph.addNode(node);
+                    await this.sessionGraph.addNode(node);
                     extracted.push(node);
                 }
             }
@@ -138,7 +138,7 @@ export class EntityExtractor {
     /**
      * Extract relationships between entities
      */
-    extractRelations(content: string, recentNodes: GraphNode[]): void {
+    async extractRelations(content: string, recentNodes: GraphNode[]): Promise<void> {
         if (recentNodes.length < 2) return;
 
         // Check for explicit relationship patterns
@@ -148,7 +148,7 @@ export class EntityExtractor {
                     // Connect the two most recent relevant nodes
                     const lastTwo = recentNodes.slice(-2);
                     if (lastTwo.length === 2) {
-                        this.sessionGraph.addEdge({
+                        await this.sessionGraph.addEdge({
                             from: lastTwo[0].id,
                             to: lastTwo[1].id,
                             type
@@ -166,7 +166,7 @@ export class EntityExtractor {
         for (const error of errors) {
             for (const solution of solutions) {
                 if (solution.createdAt > error.createdAt) {
-                    this.sessionGraph.addEdge({
+                    await this.sessionGraph.addEdge({
                         from: error.id,
                         to: solution.id,
                         type: 'RESOLVED_BY'
@@ -182,7 +182,7 @@ export class EntityExtractor {
         for (const decision of decisions) {
             for (const artifact of artifacts) {
                 if (artifact.createdAt >= decision.createdAt) {
-                    this.sessionGraph.addEdge({
+                    await this.sessionGraph.addEdge({
                         from: decision.id,
                         to: artifact.id,
                         type: 'IMPLEMENTED_IN'
@@ -195,8 +195,8 @@ export class EntityExtractor {
     /**
      * Process a message and update the graph
      */
-    processMessage(content: string): GraphNode[] {
-        const entities = this.extractEntities(content);
+    async processMessage(content: string): Promise<GraphNode[]> {
+        const entities = await this.extractEntities(content);
 
         if (entities.length > 0) {
             // Get recent nodes for relationship extraction
@@ -206,7 +206,7 @@ export class EntityExtractor {
                 .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                 .slice(-10);
 
-            this.extractRelations(content, recentNodes);
+            await this.extractRelations(content, recentNodes);
         }
 
         return entities;

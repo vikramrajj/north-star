@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ContextBridge } from './core/contextBridge';
+import { SessionCleaner } from './memory/sessionCleaner';
 import { SessionRecovery } from './persistence/sessionRecovery';
 
 let contextBridge: ContextBridge;
@@ -9,10 +10,19 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize core components
     contextBridge = new ContextBridge(context);
+    await contextBridge.initialize();
 
     // Check for session recovery on startup
     const sessionRecovery = new SessionRecovery(context);
     await sessionRecovery.checkForPreviousSession();
+
+    // Initialize Memory Management (Ralph Loop Task 1)
+    const sessionCleaner = new SessionCleaner(context);
+    // Cleanup on startup
+    sessionCleaner.clean().catch(console.error);
+    // Recurring cleanup every hour
+    const cleanupInterval = setInterval(() => sessionCleaner.clean().catch(console.error), 60 * 60 * 1000);
+    context.subscriptions.push({ dispose: () => clearInterval(cleanupInterval) });
 
     // Register commands
     context.subscriptions.push(
@@ -58,11 +68,7 @@ export async function activate(context: vscode.ExtensionContext) {
             );
 
             if (confirm === 'Clear') {
-                context.globalState.update('messages', undefined);
-                context.globalState.update('objectives', undefined);
-                context.globalState.update('highlights', undefined);
-                context.globalState.update('sessionGraph', undefined);
-                context.globalState.update('vectorStore', undefined);
+                await contextBridge.clearSession();
                 vscode.window.showInformationMessage('Session cleared.');
             }
         })

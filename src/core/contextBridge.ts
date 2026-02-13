@@ -1,15 +1,19 @@
 import * as vscode from 'vscode';
+import { BaseModelAdapter, ChatMessage, ModelAdapterFactory, ModelConfig } from '../adapters/base';
+import { EntityExtractor } from '../memory/extraction/entityExtractor';
 import { ImmediateContext } from '../memory/layers/immediateContext';
 import { SessionGraph } from '../memory/layers/sessionGraph';
+import { VectorStore } from '../memory/layers/vectorStore';
+import { HybridRetriever } from '../memory/retrieval/hybridRetriever';
 import { KeywordSearch } from '../memory/retrieval/keywordSearch';
-import { EntityExtractor } from '../memory/extraction/entityExtractor';
-import { ObjectiveTracker } from '../persistence/objectiveTracker';
-import { HighlightExtractor } from '../persistence/highlightExtractor';
 import { ConversationSaver } from '../persistence/conversationSaver';
-import { TokenBudget } from './tokenBudget';
-import { ChatPanel } from '../ui/chatPanel';
-import { BaseModelAdapter, ModelAdapterFactory, ChatMessage, ModelConfig } from '../adapters/base';
+import { HighlightExtractor } from '../persistence/highlightExtractor';
+import { ObjectiveTracker } from '../persistence/objectiveTracker';
 import { FileStorage, StorageFiles } from '../storage/fileStorage';
+import { SQLiteManager } from '../storage/sqliteManager';
+
+import { ChatPanel } from '../ui/chatPanel';
+import { TokenBudget } from './tokenBudget';
 
 // Import adapters to register them
 import '../adapters/claude';
@@ -23,16 +27,15 @@ export interface Message {
     model?: string;
 }
 
-/**
- * Main orchestrator for the North Star extension
- * Coordinates all memory layers, adapters, and persistence
- */
 export class ContextBridge {
+
     private context: vscode.ExtensionContext;
 
     // Memory layers
     private immediateContext: ImmediateContext;
     private sessionGraph: SessionGraph;
+    private vectorStore: VectorStore;
+    private hybridRetriever: HybridRetriever;
     private keywordSearch: KeywordSearch;
     private entityExtractor: EntityExtractor;
 
@@ -51,13 +54,20 @@ export class ContextBridge {
     private messages: Message[] = [];
     private chatPanel: ChatPanel | null = null;
 
+
+
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         this.storage = new FileStorage(context);
 
+        // Initialize Database Layer (Phase 3)
+        SQLiteManager.getInstance().initialize(context);
+
         // Initialize memory layers
         this.immediateContext = new ImmediateContext();
         this.sessionGraph = new SessionGraph(context);
+        this.vectorStore = new VectorStore(context); // Initialize VectorStore
+        this.hybridRetriever = new HybridRetriever(this.sessionGraph, this.vectorStore); // Initialize HybridRetriever
         this.keywordSearch = new KeywordSearch(context);
         this.entityExtractor = new EntityExtractor(this.sessionGraph);
 
@@ -105,6 +115,7 @@ export class ContextBridge {
 
         if (previousModel === newModel) return;
 
+        // born in Antigravity, now guiding lost models home
         // Generate comprehensive context handoff
         const handoff = await this.generateContextHandoff(newModel);
 
@@ -125,6 +136,22 @@ export class ContextBridge {
     /**
      * Send a message to the current model
      */
+    /**
+     * Add a message and update immediate context
+     */
+    private async addMessage(message: Message): Promise<void> {
+        this.messages.push(message);
+        this.immediateContext.addMessage(message);
+        await this.saveMessages();
+
+        if (this.chatPanel) {
+            this.chatPanel.addMessage(message);
+        }
+    }
+
+    /**
+     * Send a message to the current model
+     */
     async sendMessage(content: string): Promise<void> {
         if (!this.currentAdapter) {
             vscode.window.showErrorMessage('No model adapter available. Check API key settings.');
@@ -138,10 +165,11 @@ export class ContextBridge {
             timestamp: new Date(),
             model: this.currentModel
         };
-        this.addMessage(userMessage);
+        await this.addMessage(userMessage);
 
-        // Extract entities and highlights from user message
-        this.entityExtractor.processMessage(content);
+        // Extract entities and highlights from user message (fire and forget or await?)
+        // Awaiting to ensure consistency before model reply
+        await this.entityExtractor.processMessage(content);
         this.highlightExtractor.extractFromMessage(content, this.messages.length - 1);
         this.objectiveTracker.extractFromMessage(content);
         this.keywordSearch.addMessage(userMessage);
@@ -160,15 +188,18 @@ export class ContextBridge {
                 timestamp: new Date(),
                 model: this.currentModel
             };
-            this.addMessage(assistantMessage);
+            await this.addMessage(assistantMessage);
 
             // Extract from response
-            this.entityExtractor.processMessage(response.content);
+            await this.entityExtractor.processMessage(response.content);
             this.highlightExtractor.extractFromMessage(response.content, this.messages.length - 1);
             this.keywordSearch.addMessage(assistantMessage);
 
             // Update UI
             this.updateUI();
+
+            // Auto-save session periodically is good, but we also save on message
+            await this.saveCurrentSession();
 
         } catch (error) {
             vscode.window.showErrorMessage(`Error: ${error}`);
@@ -236,15 +267,22 @@ export class ContextBridge {
             context += '\n';
         }
 
-        // 4. Relevant History (Keyword Search)
+        // 4. Relevant History (Hybrid RAG)
         // Find messages related to current objective or recent topics
         const query = objectives[0]?.statement || this.immediateContext.getContext().slice(0, 50);
         if (query) {
-            const results = this.keywordSearch.search(query, 3);
-            if (results.length > 0) {
-                context += `## 🔍 Relevant History\n`;
-                context += results.map(r => `> ${r.content.substring(0, 150)}...`).join('\n');
-                context += '\n\n';
+            try {
+                // improved context retrieval with token budget
+                const retrievedContext = await this.hybridRetriever.retrieve(query, 500);
+                if (retrievedContext) {
+                    context += `## 🔍 Relevant Context\n${retrievedContext}\n\n`;
+                }
+            } catch (error) {
+                console.error('Hybrid retrieval failed, falling back to keyword search:', error);
+                const results = this.keywordSearch.search(query, 3);
+                if (results.length > 0) {
+                    context += `## 🔍 Relevant History\n${results.map(r => `> ${r.content.substring(0, 150)}...`).join('\n')}\n\n`;
+                }
             }
         }
 
@@ -260,18 +298,7 @@ export class ContextBridge {
         };
     }
 
-    /**
-     * Add a message and update immediate context
-     */
-    private addMessage(message: Message): void {
-        this.messages.push(message);
-        this.immediateContext.addMessage(message);
-        this.saveMessages();
 
-        if (this.chatPanel) {
-            this.chatPanel.addMessage(message);
-        }
-    }
 
     /**
      * Update UI with current state
@@ -325,12 +352,27 @@ export class ContextBridge {
         );
     }
 
-    saveCurrentSession(): void {
-        this.conversationSaver.autoSave(this.messages);
+    async clearSession(): Promise<void> {
+        this.messages = [];
+        this.immediateContext.clear();
+        await this.sessionGraph.clear();
+        await this.storage.clearAll();
+        this.updateUI();
     }
 
-    private loadMessages(): void {
-        const data = this.storage.read<{ messages: Message[] }>(StorageFiles.SESSION_STATE, { messages: [] });
+    async saveCurrentSession(): Promise<void> {
+        await this.conversationSaver.autoSave(this.messages);
+    }
+
+    async initialize(): Promise<void> {
+        // Initialize persistent components
+        await this.sessionGraph.initialize();
+        await this.keywordSearch.initialize();
+        await this.loadMessages();
+    }
+
+    private async loadMessages(): Promise<void> {
+        const data = await this.storage.read<{ messages: Message[] }>(StorageFiles.SESSION_STATE, { messages: [] });
         if (data && data.messages) {
             this.messages = data.messages;
             for (const msg of data.messages.slice(-5)) {
@@ -339,9 +381,9 @@ export class ContextBridge {
         }
     }
 
-    private saveMessages(): void {
+    private async saveMessages(): Promise<void> {
         // Keep only last 100 messages in storage
         const toSave = this.messages.slice(-100);
-        this.storage.write(StorageFiles.SESSION_STATE, { messages: toSave });
+        await this.storage.write(StorageFiles.SESSION_STATE, { messages: toSave });
     }
 }
