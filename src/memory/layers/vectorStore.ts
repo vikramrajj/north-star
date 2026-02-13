@@ -26,6 +26,8 @@ export class VectorStore {
      * Add content with embedding
      */
     async add(id: string, content: string, metadata?: Record<string, any>): Promise<void> {
+        if (!this.dbManager.isInitialized()) return;
+
         const embedding = await this.generateEmbedding(content);
         // Convert to Buffer for BLOB storage
         const buffer = Buffer.from(new Float32Array(embedding).buffer);
@@ -48,6 +50,8 @@ VALUES(?, ?, ?, ?, ?)
      * Semantic search - find most similar entries
      */
     async search(query: string, k: number = 10): Promise<VectorEntry[]> {
+        if (!this.dbManager.isInitialized()) return [];
+
         const queryEmbedding = await this.generateEmbedding(query);
 
         // Fetch all vectors (Full Scan - optimized by native SQLite speed)
@@ -110,6 +114,7 @@ VALUES(?, ?, ?, ?, ?)
     }
 
     clear(): void {
+        if (!this.dbManager.isInitialized()) return;
         this.dbManager.getDB().exec('DELETE FROM vectors');
     }
 }

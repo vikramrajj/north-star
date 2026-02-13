@@ -1,4 +1,3 @@
-import Database from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -9,7 +8,7 @@ import * as vscode from 'vscode';
  */
 export class SQLiteManager {
     private static instance: SQLiteManager;
-    private db: Database.Database | null = null;
+    private db: any | null = null;
     private context: vscode.ExtensionContext | null = null;
 
     private constructor() { }
@@ -29,6 +28,16 @@ export class SQLiteManager {
         if (this.db) return;
 
         try {
+            // Lazy load better-sqlite3 to prevent startup crash if native bindings fail
+            let Database;
+            try {
+                Database = require('better-sqlite3');
+            } catch (e) {
+                console.error('Failed to load better-sqlite3:', e);
+                vscode.window.showErrorMessage('North Star: SQLite native module failed to load. Persistence will be limited to JSON files.');
+                return;
+            }
+
             // Use global storage for the database file
             const dbPath = path.join(context.globalStorageUri.fsPath, 'northstar.db');
 
@@ -48,14 +57,21 @@ export class SQLiteManager {
         } catch (error) {
             console.error('Failed to initialize SQLite database:', error);
             vscode.window.showErrorMessage('North Star: Failed to initialize database. Falling back to file storage.');
-            throw error;
+            // Do not throw, allow extension to continue
         }
+    }
+
+    /**
+     * Check if database is initialized
+     */
+    isInitialized(): boolean {
+        return this.db !== null;
     }
 
     /**
      * Get database instance
      */
-    getDB(): Database.Database {
+    getDB(): any {
         if (!this.db) {
             throw new Error('Database not initialized. Call initialize() first.');
         }

@@ -43,6 +43,8 @@ export class SessionGraph {
     }
 
     async addNode(node: GraphNode): Promise<void> {
+        if (!this.dbManager.isInitialized()) return;
+
         const stmt = this.dbManager.getDB().prepare(`
             INSERT OR REPLACE INTO graph_nodes (id, type, content, metadata, created_at)
             VALUES (?, ?, ?, ?, ?)
@@ -58,6 +60,8 @@ export class SessionGraph {
     }
 
     async addEdge(edge: GraphEdge): Promise<void> {
+        if (!this.dbManager.isInitialized()) return;
+
         const stmt = this.dbManager.getDB().prepare(`
             INSERT OR REPLACE INTO graph_edges (source, target, type, weight, created_at)
             VALUES (?, ?, ?, ?, ?)
@@ -76,6 +80,8 @@ export class SessionGraph {
      * Traverse graph from a starting node up to specified depth (BFS)
      */
     traverse(startId: string, depth: number = 3, nodeTypes?: NodeType[]): GraphNode[] {
+        if (!this.dbManager.isInitialized()) return [];
+
         const visited = new Set<string>();
         const result: GraphNode[] = [];
         let queue: { id: string, depth: number }[] = [{ id: startId, depth: 0 }];
@@ -117,6 +123,8 @@ export class SessionGraph {
      * Find nodes by type
      */
     getNodesByType(type: NodeType): GraphNode[] {
+        if (!this.dbManager.isInitialized()) return [];
+
         const stmt = this.dbManager.getDB().prepare('SELECT * FROM graph_nodes WHERE type = ? ORDER BY created_at DESC');
         const rows = stmt.all(type) as any[];
         return rows.map(this.mapRowToNode);
@@ -137,6 +145,8 @@ export class SessionGraph {
     }
 
     async clear(): Promise<void> {
+        if (!this.dbManager.isInitialized()) return;
+
         this.dbManager.getDB().exec('DELETE FROM graph_nodes');
         this.dbManager.getDB().exec('DELETE FROM graph_edges');
     }
