@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ContextBridge } from './core/contextBridge';
 import { SessionCleaner } from './memory/sessionCleaner';
 import { SessionRecovery } from './persistence/sessionRecovery';
+import { SidebarProvider } from './ui/sidebarProvider';
 
 let contextBridge: ContextBridge;
 
@@ -23,6 +24,13 @@ export async function activate(context: vscode.ExtensionContext) {
     // Recurring cleanup every hour
     const cleanupInterval = setInterval(() => sessionCleaner.clean().catch(console.error), 60 * 60 * 1000);
     context.subscriptions.push({ dispose: () => clearInterval(cleanupInterval) });
+
+    // Initialize Sidebar Provider
+    const sidebarProvider = new SidebarProvider(context.extensionUri);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(SidebarProvider.viewType, sidebarProvider)
+    );
+    contextBridge.registerSidebar(sidebarProvider);
 
     // Register commands
     context.subscriptions.push(

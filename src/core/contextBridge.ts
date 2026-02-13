@@ -13,6 +13,7 @@ import { FileStorage, StorageFiles } from '../storage/fileStorage';
 import { SQLiteManager } from '../storage/sqliteManager';
 
 import { ChatPanel } from '../ui/chatPanel';
+import { SidebarProvider } from '../ui/sidebarProvider';
 import { TokenBudget } from './tokenBudget';
 
 // Import adapters to register them
@@ -53,7 +54,7 @@ export class ContextBridge {
     private currentAdapter: BaseModelAdapter | null = null;
     private messages: Message[] = [];
     private chatPanel: ChatPanel | null = null;
-
+    private sidebarProvider: SidebarProvider | null = null;
 
 
     constructor(context: vscode.ExtensionContext) {
@@ -127,6 +128,9 @@ export class ContextBridge {
         if (this.chatPanel) {
             this.chatPanel.setCurrentModel(newModel);
         }
+        if (this.sidebarProvider) {
+            this.sidebarProvider.setCurrentModel(newModel);
+        }
 
         vscode.window.showInformationMessage(
             `🌟 Switched to ${newModel}. North Star context injected (${handoff.tokenCount} tokens).`
@@ -146,6 +150,10 @@ export class ContextBridge {
 
         if (this.chatPanel) {
             this.chatPanel.addMessage(message);
+        }
+
+        if (this.sidebarProvider) {
+            this.sidebarProvider.addMessage(message);
         }
     }
 
@@ -304,9 +312,43 @@ export class ContextBridge {
      * Update UI with current state
      */
     private updateUI(): void {
+        const objectives = this.objectiveTracker.getAllObjectives();
+        const highlights = this.highlightExtractor.getAllHighlights();
+
         if (this.chatPanel) {
-            this.chatPanel.updateObjectives(this.objectiveTracker.getAllObjectives());
-            this.chatPanel.updateHighlights(this.highlightExtractor.getAllHighlights());
+            this.chatPanel.updateObjectives(objectives);
+            this.chatPanel.updateHighlights(highlights);
+        }
+
+        if (this.sidebarProvider) {
+            this.sidebarProvider.updateObjectives(objectives);
+            this.sidebarProvider.updateHighlights(highlights);
+        }
+    }
+
+    /**
+     * Register the sidebar provider
+     */
+    registerSidebar(provider: SidebarProvider): void {
+        this.sidebarProvider = provider;
+
+        // Set up callbacks
+        this.sidebarProvider.onMessage((message: string) => {
+            this.sendMessage(message);
+        });
+
+        this.sidebarProvider.onModelSwitch((model: string) => {
+            this.switchModel(model);
+        });
+
+        // Initial state
+        this.sidebarProvider.setCurrentModel(this.currentModel);
+        this.sidebarProvider.updateObjectives(this.objectiveTracker.getAllObjectives());
+        this.sidebarProvider.updateHighlights(this.highlightExtractor.getAllHighlights());
+
+        // Load existing messages
+        for (const msg of this.messages) {
+            this.sidebarProvider.addMessage(msg);
         }
     }
 
