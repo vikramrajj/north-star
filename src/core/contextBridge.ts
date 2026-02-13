@@ -346,6 +346,16 @@ export class ContextBridge {
         this.sidebarProvider.updateObjectives(this.objectiveTracker.getAllObjectives());
         this.sidebarProvider.updateHighlights(this.highlightExtractor.getAllHighlights());
 
+        // Notify UI of storage mode
+        if (!SQLiteManager.getInstance().isInitialized()) {
+            this.sidebarProvider.addMessage({
+                role: 'assistant',
+                content: '⚠️ **Lite Mode Active**: SQLite failed to load. Using file storage.',
+                timestamp: new Date(),
+                model: 'system'
+            });
+        }
+
         // Load existing messages
         for (const msg of this.messages) {
             this.sidebarProvider.addMessage(msg);
